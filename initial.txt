@@ -1,0 +1,33 @@
+- Do u know the gaussian splatting tech? I would create my own splatting demo on the
+https://live.arrival.space/
+Is it complex? What hadrware & software do I need?
+- Yeah, Gaussian Splatting is a fascinating technique! Let me break it down for you.
+
+**What it is**
+
+3D Gaussian Splatting (3DGS) is a real-time novel view synthesis method from the 2023 SIGGRAPH paper by Kerbl et al. Instead of neural networks for rendering (like NeRF), it represents scenes as millions of 3D Gaussians (ellipsoids with color, opacity, and covariance) that get "splatted" (projected) onto a 2D screen. It's dramatically faster than NeRF — real-time at 30-100+ FPS vs seconds per frame.
+
+**Is it complex?**
+
+The math is moderately complex (covariance matrices, spherical harmonics for color, alpha compositing), but the tooling has matured a lot. For your use case — a web demo on `live.arrival.space` — the pipeline is well-defined:
+
+1. Capture photos/video of a scene (20–200 images from different angles)
+2. Run COLMAP for camera pose estimation (Structure from Motion)
+3. Train a Gaussian Splat model (~30 min to a few hours)
+4. Export and render in browser via WebGL/WebGPU
+
+**Hardware requirements**
+
+For training, CUDA is essentially mandatory. You'd want at minimum an 8GB VRAM GPU (RTX 3070/4060 class), though 16–24GB is comfortable for larger scenes. The original 3DGS repo is CUDA/PyTorch-based, so your ML background gives you a real head start here. For inference/viewing, even integrated graphics can handle pre-trained splats in the browser.
+
+**Software stack**
+
+For training, the main options are the original `gaussian-splatting` repo, or the cleaner `nerfstudio` with its `splatfacto` method, or `gsplat` (a Python library that's become the de facto standard). For the web viewer specifically, since you're targeting a live streaming/WebGL page, `gsplat.js` or `SuperSplat` (by PlayCanvas) are the go-to tools — they render `.ply` or `.splat` files directly in browser via WebGL2/WebGPU.
+
+The `live.arrival.space` site looks like it's built around streaming 3DGS content, so you'd likely just need to produce a trained `.splat`/`.ply` file and plug it into their viewer framework or a compatible one.
+
+**Rough pipeline for your demo**
+
+Capture scene → COLMAP → train with `gsplat` or `nerfstudio` → export `.ply` → load in a WebGL viewer → embed on your page.
+
+Given your PyTorch background, the training step will feel very familiar. The trickiest part is usually getting good COLMAP reconstructions, which depends heavily on capture quality (overlap, lighting, no motion blur).
