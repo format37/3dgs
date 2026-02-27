@@ -10,17 +10,58 @@ Video → Frames → COLMAP SfM → Splatfacto Train → Export PLY → Clean & 
 ## Prerequisites
 
 - NVIDIA GPU with 8+ GB VRAM (tested on RTX 4090)
+- CUDA toolkit (tested with CUDA 12.5)
 - CUDA-compatible PyTorch
 - FFmpeg
 - Node.js 20+ (only if you need SPZ conversion)
 
 ## Setup
 
-### 1. Install COLMAP
+### 1. Install COLMAP (with CUDA)
+
+The default `sudo apt install colmap` installs a CPU-only build. For GPU-accelerated
+feature extraction and matching (significantly faster), build from source.
+
+**Important:** Use tag `3.11.1` — the latest `main` branch adds an OpenImageIO
+dependency that causes linking conflicts with anaconda. Also, if you have anaconda
+installed, strip it from `PATH` during the build to avoid library mismatches.
 
 ```bash
-sudo apt install colmap
+# Install dependencies (Ubuntu 22.04)
+sudo apt install -y \
+  build-essential cmake git ninja-build \
+  libcgal-dev libeigen3-dev libsuitesparse-dev libfreeimage-dev \
+  libgoogle-glog-dev libgflags-dev libsqlite3-dev libglew-dev \
+  libflann-dev liblz4-dev libboost-all-dev libceres-dev \
+  libopencv-dev qtbase5-dev libqt5opengl5-dev
+
+# Clone and checkout 3.11.1
+git clone https://github.com/colmap/colmap.git
+cd colmap
+git checkout 3.11.1
+mkdir build && cd build
+
+# Configure — strip anaconda from PATH, point to correct nvcc
+# Replace 89 with your GPU's compute capability (89 = RTX 4090/Ada Lovelace)
+# Replace /usr/local/cuda-12.5 with your CUDA toolkit path
+PATH=/usr/local/cuda-12.5/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin CMAKE_PREFIX_PATH="" cmake .. -GNinja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES=89 -DCUDA_ENABLED=ON -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.5/bin/nvcc
+
+# Build (strip anaconda from PATH here too)
+PATH=/usr/local/cuda-12.5/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ninja -j$(nproc)
+
+sudo ninja install
 ```
+
+Verify GPU support:
+```bash
+colmap -h  # Should say "with CUDA", NOT "without CUDA"
+```
+
+**Common build issues:**
+- `Unsupported gpu architecture 'compute_'` — cmake too old for `native`; use explicit arch (e.g. `89`)
+- `/usr/bin/nvcc` picked up instead of CUDA toolkit — set `-DCMAKE_CUDA_COMPILER=/usr/local/cuda-XX/bin/nvcc`
+- TIFF/GDAL linking errors — anaconda libs leaking in; strip anaconda from PATH
+- OpenImageIO errors — use tag `3.11.1` instead of `main`
 
 ### 2. Install Nerfstudio
 
@@ -216,6 +257,7 @@ Quality of the input video is the single biggest factor for good results. Poor v
 
 | Problem | Solution |
 |---------|----------|
+| COLMAP says "without CUDA" | Build from source with `-DCUDA_ENABLED=ON` (see Setup step 1) |
 | COLMAP fails / few matches | More frames, better overlap, textured surfaces |
 | OOM during training | Add `--pipeline.datamanager.camera-res-scale-factor 0.5` |
 | `weights_only` error on export | Apply the PyTorch patch in Setup step 3 |
