@@ -1,9 +1,9 @@
 # Video to 3D Gaussian Splat Pipeline
 
-Convert a phone video into a 3D Gaussian Splat (`.spz`) and upload to [live.arrival.space](https://live.arrival.space).
+Convert a phone video into a 3D Gaussian Splat (`.ply`) and upload to [live.arrival.space](https://live.arrival.space).
 
 ```
-Video → Frames → COLMAP SfM → Splatfacto Train → Export PLY → Convert SPZ → Upload
+Video → Frames → COLMAP SfM → Splatfacto Train → Export PLY → Clean & Rotate → Upload
          (auto via nerfstudio)
 ```
 
@@ -12,7 +12,7 @@ Video → Frames → COLMAP SfM → Splatfacto Train → Export PLY → Convert 
 - NVIDIA GPU with 8+ GB VRAM (tested on RTX 4090)
 - CUDA-compatible PyTorch
 - FFmpeg
-- Node.js 20+
+- Node.js 20+ (only if you need SPZ conversion)
 
 ## Setup
 
@@ -30,13 +30,7 @@ pip install nerfstudio
 
 Verify: `ns-train --help`
 
-### 3. Install SPZ converter
-
-```bash
-npm install   # installs spz-js from package.json
-```
-
-### 4. PyTorch compatibility fix
+### 3. PyTorch compatibility fix
 
 Nerfstudio 1.1.5 has a compatibility issue with PyTorch 2.6+ (`weights_only` default changed to `True`). Patch the checkpoint loader:
 
@@ -86,7 +80,7 @@ Replace `<TIMESTAMP>` with the actual run directory (e.g., `2026-02-27_160905`).
 
 ### 4. Preview exported PLY
 
-Before converting, verify the export looks correct.
+Before uploading, verify the export looks correct.
 
 **Option A: Nerfstudio viewer** (shows trained model from checkpoint)
 
@@ -104,27 +98,33 @@ python3 -m http.server 8080
 
 Open http://localhost:8080/viewer.html in your browser. Buttons in the top-right switch between PLY files in `export/`. Uses [@mkkellogg/gaussian-splats-3d](https://github.com/mkkellogg/GaussianSplats3D) via CDN.
 
-### 5. Clean up outlier gaussians
+### 5. Clean up and fix orientation
 
-Exported PLY files often contain a large cloud of floating artifact gaussians
-surrounding the actual scene. These must be removed before uploading to web
-viewers (like live.arrival.space) that don't let you zoom past them.
+Exported PLY files typically need two fixes before uploading:
+
+1. **Outlier removal** — a large cloud of floating artifact gaussians surrounds the scene
+2. **Rotation** — phone video produces a scene where the subject is "lying down" (rotated 90°)
 
 ```bash
-# Basic cleanup — remove gaussians far from the scene center
-python3 cleanup_ply.py export/splat.ply export/splat_clean.ply --distance 5.0
+# Recommended: clean + fix phone video orientation (+90° around X axis)
+python3 cleanup_ply.py export/splat.ply export/splat_final.ply \
+  --distance 3.0 --min-opacity 0.0 --rotate-x 90
 
-# Tighter cleanup — also remove low-opacity gaussians
-python3 cleanup_ply.py export/splat.ply export/splat_clean.ply --distance 3.0 --min-opacity 0.0
+# Just cleanup, no rotation
+python3 cleanup_ply.py export/splat.ply export/splat_clean.ply \
+  --distance 3.0 --min-opacity 0.0
 
 # Aggressive cleanup — also cap scale to reduce spiky artifacts
-python3 cleanup_ply.py export/splat.ply export/splat_clean.ply --distance 3.0 --min-opacity 0.0 --max-scale 3.0
+python3 cleanup_ply.py export/splat.ply export/splat_final.ply \
+  --distance 3.0 --min-opacity 0.0 --max-scale 3.0 --rotate-x 90
 ```
 
-The script filters by:
-- **Distance** from the median center point (removes outlier cloud)
-- **Opacity** in logit space (`0.0` = 50% visible; `-2.0` = 12% visible)
-- **Scale** in log space (caps the size of individual gaussians)
+The script supports:
+- **`--distance`** — max distance from median center (removes outlier cloud)
+- **`--min-opacity`** — min opacity in logit space (`0.0` = 50% visible; `-2.0` = 12%)
+- **`--max-scale`** — max scale in log space (caps gaussian size, reduces spikes)
+- **`--rotate-x/y/z`** — rotation in degrees around each axis
+- **`--recenter`** — move scene center to origin
 
 Preview the result in the local viewer (Step 4B) and adjust thresholds until
 the scene looks clean. You can also use [SuperSplat](https://playcanvas.com/supersplat/editor)
@@ -140,21 +140,25 @@ ns-export gaussian-splat \
   --obb-scale 6.0 6.0 6.0
 ```
 
-### 6. Convert PLY to SPZ
+### 6. Upload
+
+Go to [live.arrival.space](https://live.arrival.space) and upload the cleaned PLY file (e.g., `export/splat_final.ply`).
+
+arrival.space accepts both `.ply` and `.spz` formats.
+
+### 7. (Optional) Convert PLY to SPZ
+
+SPZ is ~10x smaller than PLY. Only needed if file size matters.
 
 ```bash
-node convert_to_spz.mjs [input.ply] [output.spz]
-# defaults: export/splat.ply → export/scene.spz
+npm install              # first time only — installs spz-js
+node convert_to_spz.mjs  # defaults: export/splat.ply → export/scene.spz
 
-# Convert the cleaned version
-node convert_to_spz.mjs export/splat_clean.ply export/scene_clean.spz
+# Convert a specific file
+node convert_to_spz.mjs export/splat_final.ply export/scene_final.spz
 ```
 
-SPZ is ~10x smaller than PLY.
-
-### 7. Upload
-
-Go to [live.arrival.space](https://live.arrival.space) and upload `export/scene_clean.spz`.
+Note: `spz-js` requires PLY with SH coefficients (the default nerfstudio export). It will fail on PLY exported with `--ply-color-mode rgb`.
 
 ## Video Capture Tips
 
@@ -201,11 +205,10 @@ Quality of the input video is the single biggest factor for good results. Poor v
       config.yml
       nerfstudio_models/step-*.ckpt
   export/
-    splat.ply         # Gaussian splat (full, with SH coefficients)
-    splat_clean.ply   # Cleaned PLY (outliers removed)
-    scene_clean.spz   # Compressed clean splat (for upload)
-  cleanup_ply.py      # Remove outlier gaussians from PLY
-  convert_to_spz.mjs  # PLY→SPZ converter
+    splat.ply         # Gaussian splat (raw export)
+    splat_final.ply   # Cleaned + rotated PLY (ready to upload)
+  cleanup_ply.py      # Clean outliers + rotate PLY
+  convert_to_spz.mjs  # PLY→SPZ converter (optional)
   viewer.html         # Local 3DGS web viewer
 ```
 
@@ -215,9 +218,10 @@ Quality of the input video is the single biggest factor for good results. Poor v
 |---------|----------|
 | COLMAP fails / few matches | More frames, better overlap, textured surfaces |
 | OOM during training | Add `--pipeline.datamanager.camera-res-scale-factor 0.5` |
-| `weights_only` error on export | Apply the PyTorch patch in Setup step 4 |
+| `weights_only` error on export | Apply the PyTorch patch in Setup step 3 |
 | Spiky / blobby result | Better video (see capture tips above) |
-| Huge artifact cloud around scene | Run `cleanup_ply.py` to remove outliers (Step 5) |
+| Huge artifact cloud around scene | Run `cleanup_ply.py` with `--distance` filter (Step 5) |
 | Scene tiny on arrival.space | Outlier cloud pushes camera too far; clean up first |
+| Subject lying on its side | Add `--rotate-x 90` to cleanup_ply.py (Step 5) |
 | `spz-js` error "Missing f_dc_0" | PLY was exported with `--ply-color-mode rgb`; use default `sh_coeffs` |
 | torch.compile takes forever | Normal on first run (~5-15 min); subsequent runs are cached |
