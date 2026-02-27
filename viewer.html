@@ -10,26 +10,10 @@
       font-family: monospace; font-size: 14px; z-index: 10;
       background: rgba(0,0,0,0.7); padding: 8px 12px; border-radius: 4px;
     }
-    #file-select {
-      position: absolute; top: 10px; right: 10px; z-index: 10;
-      font-family: monospace; font-size: 14px;
-    }
-    #file-select button {
-      padding: 8px 16px; margin: 4px; cursor: pointer;
-      background: #333; color: #fff; border: 1px solid #666; border-radius: 4px;
-    }
-    #file-select button:hover { background: #555; }
-    #file-select button.active { background: #0a0; border-color: #0f0; }
   </style>
 </head>
 <body>
-  <div id="info">Loading...</div>
-  <div id="file-select">
-    <button onclick="loadFile('splat_rotX-90.ply')">rotX -90°</button>
-    <button onclick="loadFile('splat_rotX+90.ply')">rotX +90°</button>
-    <button onclick="loadFile('splat_clean.ply')">clean (no rot)</button>
-    <button onclick="loadFile('splat.ply')">original</button>
-  </div>
+  <div id="info">Loading splat_final.ply...</div>
   <script type="importmap">
   {
     "imports": {
@@ -42,43 +26,27 @@
     import * as GaussianSplats3D from '@mkkellogg/gaussian-splats-3d';
 
     const info = document.getElementById('info');
-    let viewer = null;
 
-    window.loadFile = async function(filename) {
-      if (viewer) {
-        viewer.dispose();
-        viewer = null;
-      }
+    try {
+      const viewer = new GaussianSplats3D.Viewer({
+        cameraUp: [0, -1, 0],
+        initialCameraPosition: [0, 0, 5],
+        initialCameraLookAt: [0, 0, 0],
+        sharedMemoryForWorkers: false,
+        sphericalHarmonicsDegree: 2
+      });
 
-      document.querySelectorAll('#file-select button').forEach(b => b.classList.remove('active'));
-      const btnId = filename.includes('rgb') ? 'btn-rgb' : 'btn-sh';
-      document.getElementById(btnId).classList.add('active');
+      await viewer.addSplatScene('/export/splat_final.ply', {
+        progressiveLoad: true,
+        showLoadingUI: true
+      });
+      viewer.start();
 
-      info.textContent = `Loading ${filename}...`;
-
-      try {
-        viewer = new GaussianSplats3D.Viewer({
-          cameraUp: [0, -1, 0],
-          initialCameraPosition: [0, 0, 5],
-          initialCameraLookAt: [0, 0, 0],
-          sharedMemoryForWorkers: false,
-          sphericalHarmonicsDegree: filename.includes('rgb') ? 0 : 2
-        });
-
-        await viewer.addSplatScene(`/export/${filename}`, {
-          progressiveLoad: true,
-          showLoadingUI: true
-        });
-        viewer.start();
-
-        info.textContent = `Loaded ${filename} — drag to rotate, scroll to zoom`;
-      } catch(e) {
-        info.textContent = `Error: ${e.message}`;
-        console.error(e);
-      }
-    };
-
-    loadFile('splat.ply');
+      info.textContent = 'Loaded splat_final.ply — drag to rotate, scroll to zoom';
+    } catch(e) {
+      info.textContent = `Error: ${e.message}`;
+      console.error(e);
+    }
   </script>
 </body>
 </html>
