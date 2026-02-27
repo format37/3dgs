@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>3DGS PLY Viewer</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: #000; }
+    #info {
+      position: absolute; top: 10px; left: 10px; color: #fff;
+      font-family: monospace; font-size: 14px; z-index: 10;
+      background: rgba(0,0,0,0.7); padding: 8px 12px; border-radius: 4px;
+    }
+    #file-select {
+      position: absolute; top: 10px; right: 10px; z-index: 10;
+      font-family: monospace; font-size: 14px;
+    }
+    #file-select button {
+      padding: 8px 16px; margin: 4px; cursor: pointer;
+      background: #333; color: #fff; border: 1px solid #666; border-radius: 4px;
+    }
+    #file-select button:hover { background: #555; }
+    #file-select button.active { background: #0a0; border-color: #0f0; }
+  </style>
+</head>
+<body>
+  <div id="info">Loading...</div>
+  <div id="file-select">
+    <button onclick="loadFile('splat_clean.ply')" id="btn-sh">splat_clean.ply (SH)</button>
+    <button onclick="loadFile('splat.ply')" id="btn-sh">splat.ply (SH)</button>
+    <button onclick="loadFile('splat_rgb.ply')" id="btn-rgb">splat_rgb.ply (RGB)</button>
+  </div>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+      "@mkkellogg/gaussian-splats-3d": "https://cdn.jsdelivr.net/npm/@mkkellogg/gaussian-splats-3d@0.4.6/build/gaussian-splats-3d.module.js"
+    }
+  }
+  </script>
+  <script type="module">
+    import * as GaussianSplats3D from '@mkkellogg/gaussian-splats-3d';
+
+    const info = document.getElementById('info');
+    let viewer = null;
+
+    window.loadFile = async function(filename) {
+      if (viewer) {
+        viewer.dispose();
+        viewer = null;
+      }
+
+      document.querySelectorAll('#file-select button').forEach(b => b.classList.remove('active'));
+      const btnId = filename.includes('rgb') ? 'btn-rgb' : 'btn-sh';
+      document.getElementById(btnId).classList.add('active');
+
+      info.textContent = `Loading ${filename}...`;
+
+      try {
+        viewer = new GaussianSplats3D.Viewer({
+          cameraUp: [0, -1, 0],
+          initialCameraPosition: [0, 0, 5],
+          initialCameraLookAt: [0, 0, 0],
+          sharedMemoryForWorkers: false,
+          sphericalHarmonicsDegree: filename.includes('rgb') ? 0 : 2
+        });
+
+        await viewer.addSplatScene(`/export/${filename}`, {
+          progressiveLoad: true,
+          showLoadingUI: true
+        });
+        viewer.start();
+
+        info.textContent = `Loaded ${filename} — drag to rotate, scroll to zoom`;
+      } catch(e) {
+        info.textContent = `Error: ${e.message}`;
+        console.error(e);
+      }
+    };
+
+    loadFile('splat.ply');
+  </script>
+</body>
+</html>

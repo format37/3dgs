@@ -84,18 +84,77 @@ ns-export gaussian-splat \
 
 Replace `<TIMESTAMP>` with the actual run directory (e.g., `2026-02-27_160905`).
 
-### 4. Convert PLY to SPZ
+### 4. Preview exported PLY
+
+Before converting, verify the export looks correct.
+
+**Option A: Nerfstudio viewer** (shows trained model from checkpoint)
+
+```bash
+ns-viewer --load-config output/scene/splatfacto/<TIMESTAMP>/config.yml
+```
+
+Open http://localhost:7007 in your browser. Drag to rotate, scroll to zoom.
+
+**Option B: Local web viewer** (shows the actual PLY file)
+
+```bash
+python3 -m http.server 8080
+```
+
+Open http://localhost:8080/viewer.html in your browser. Buttons in the top-right switch between PLY files in `export/`. Uses [@mkkellogg/gaussian-splats-3d](https://github.com/mkkellogg/GaussianSplats3D) via CDN.
+
+### 5. Clean up outlier gaussians
+
+Exported PLY files often contain a large cloud of floating artifact gaussians
+surrounding the actual scene. These must be removed before uploading to web
+viewers (like live.arrival.space) that don't let you zoom past them.
+
+```bash
+# Basic cleanup — remove gaussians far from the scene center
+python3 cleanup_ply.py export/splat.ply export/splat_clean.ply --distance 5.0
+
+# Tighter cleanup — also remove low-opacity gaussians
+python3 cleanup_ply.py export/splat.ply export/splat_clean.ply --distance 3.0 --min-opacity 0.0
+
+# Aggressive cleanup — also cap scale to reduce spiky artifacts
+python3 cleanup_ply.py export/splat.ply export/splat_clean.ply --distance 3.0 --min-opacity 0.0 --max-scale 3.0
+```
+
+The script filters by:
+- **Distance** from the median center point (removes outlier cloud)
+- **Opacity** in logit space (`0.0` = 50% visible; `-2.0` = 12% visible)
+- **Scale** in log space (caps the size of individual gaussians)
+
+Preview the result in the local viewer (Step 4B) and adjust thresholds until
+the scene looks clean. You can also use [SuperSplat](https://playcanvas.com/supersplat/editor)
+for visual bounding-box cropping.
+
+Alternatively, crop during export using nerfstudio's OBB options:
+
+```bash
+ns-export gaussian-splat \
+  --load-config output/scene/splatfacto/<TIMESTAMP>/config.yml \
+  --output-dir export/ \
+  --obb-center 0.5 1.6 -0.5 \
+  --obb-scale 6.0 6.0 6.0
+```
+
+### 6. Convert PLY to SPZ
 
 ```bash
 node convert_to_spz.mjs [input.ply] [output.spz]
 # defaults: export/splat.ply → export/scene.spz
+
+# Convert the cleaned version
+node convert_to_spz.mjs export/splat_clean.ply export/scene_clean.spz
 ```
 
 SPZ is ~10x smaller than PLY.
 
-### 5. Upload
+### 7. Upload
 
-Go to [live.arrival.space](https://live.arrival.space) and upload `export/scene.spz`.
+Go to [live.arrival.space](https://live.arrival.space) and upload `export/scene_clean.spz`.
 
 ## Video Capture Tips
 
@@ -142,9 +201,12 @@ Quality of the input video is the single biggest factor for good results. Poor v
       config.yml
       nerfstudio_models/step-*.ckpt
   export/
-    splat.ply         # Gaussian splat (full)
-    scene.spz         # Compressed splat (for upload)
+    splat.ply         # Gaussian splat (full, with SH coefficients)
+    splat_clean.ply   # Cleaned PLY (outliers removed)
+    scene_clean.spz   # Compressed clean splat (for upload)
+  cleanup_ply.py      # Remove outlier gaussians from PLY
   convert_to_spz.mjs  # PLY→SPZ converter
+  viewer.html         # Local 3DGS web viewer
 ```
 
 ## Troubleshooting
@@ -155,4 +217,7 @@ Quality of the input video is the single biggest factor for good results. Poor v
 | OOM during training | Add `--pipeline.datamanager.camera-res-scale-factor 0.5` |
 | `weights_only` error on export | Apply the PyTorch patch in Setup step 4 |
 | Spiky / blobby result | Better video (see capture tips above) |
+| Huge artifact cloud around scene | Run `cleanup_ply.py` to remove outliers (Step 5) |
+| Scene tiny on arrival.space | Outlier cloud pushes camera too far; clean up first |
+| `spz-js` error "Missing f_dc_0" | PLY was exported with `--ply-color-mode rgb`; use default `sh_coeffs` |
 | torch.compile takes forever | Normal on first run (~5-15 min); subsequent runs are cached |
