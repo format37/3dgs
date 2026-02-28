@@ -94,6 +94,15 @@ ns-process-data video \
 
 Verify: `data/scene/` should contain `images/`, `colmap/sparse/`, and `transforms.json`.
 
+**If COLMAP reports low match count** (e.g., "only found poses for 0.7% of images"),
+COLMAP may have put the main reconstruction in a secondary model. Fix it:
+
+```bash
+python3 fix_colmap_model.py data/scene --regenerate-transforms
+```
+
+This finds the largest COLMAP model and ensures nerfstudio uses it.
+
 ### 2. Train splatfacto
 
 ```bash
@@ -249,6 +258,7 @@ Quality of the input video is the single biggest factor for good results. Poor v
     splat.ply         # Gaussian splat (raw export)
     splat_final.ply   # Cleaned + rotated PLY (ready to upload)
   cleanup_ply.py      # Clean outliers + rotate PLY
+  fix_colmap_model.py # Fix COLMAP multi-model selection issue
   convert_to_spz.mjs  # PLY→SPZ converter (optional)
   viewer.html         # Local 3DGS web viewer
 ```
@@ -258,6 +268,7 @@ Quality of the input video is the single biggest factor for good results. Poor v
 | Problem | Solution |
 |---------|----------|
 | COLMAP says "without CUDA" | Build from source with `-DCUDA_ENABLED=ON` (see Setup step 1) |
+| COLMAP "only found poses for X%" | Run `fix_colmap_model.py` — reconstruction may be in wrong model index |
 | COLMAP fails / few matches | More frames, better overlap, textured surfaces |
 | OOM during training | Add `--pipeline.datamanager.camera-res-scale-factor 0.5` |
 | `weights_only` error on export | Apply the PyTorch patch in Setup step 3 |
