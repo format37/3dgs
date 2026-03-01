@@ -2,12 +2,12 @@
 set -e
 
 if [ -z "$1" ]; then
-    echo "Usage: ./workflow.sh <video_filename>"
-    echo "Example: ./workflow.sh DJI_20260228092820_0008_D.MP4"
+    echo "Usage: ./workflow.sh <video_path>"
+    echo "Example: ./workflow.sh input/DJI_20260228092820_0008_D.MP4"
     exit 1
 fi
 
-VIDEO="input/$1"
+VIDEO="$1"
 if [ ! -f "$VIDEO" ]; then
     echo "Error: $VIDEO not found"
     exit 1

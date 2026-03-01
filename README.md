@@ -86,10 +86,10 @@ sed -i 's/torch.load(load_path, map_location="cpu")/torch.load(load_path, map_lo
 ### Quick start (full pipeline in one command)
 
 ```bash
-./workflow.sh YOUR_VIDEO.mp4
+./workflow.sh input/YOUR_VIDEO.mp4
 ```
 
-This runs the entire pipeline: frame extraction → COLMAP → fix model selection → splatfacto training (30k iterations) → PLY export → cleanup + rotation → local viewer. The video file should be in the `input/` directory.
+This runs the entire pipeline: frame extraction → COLMAP → fix model selection → splatfacto training (30k iterations) → PLY export → cleanup + rotation → local viewer.
 
 ### Step-by-step
 
