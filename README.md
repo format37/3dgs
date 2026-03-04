@@ -67,6 +67,7 @@ colmap -h  # Should say "with CUDA", NOT "without CUDA"
 
 ```bash
 pip install nerfstudio
+pip install -r requirements.txt  # fix NumPy 2.x compatibility
 ```
 
 Verify: `ns-train --help`
@@ -288,3 +289,5 @@ Quality of the input video is the single biggest factor for good results. Poor v
 | Subject lying on its side | Add `--rotate-x 90` to cleanup_ply.py (Step 5) |
 | `spz-js` error "Missing f_dc_0" | PLY was exported with `--ply-color-mode rgb`; use default `sh_coeffs` |
 | torch.compile takes forever | Normal on first run (~5-15 min); subsequent runs are cached |
+| `Numba needs NumPy 1.26 or less` | `pip install --upgrade numba` (need ≥0.60 for NumPy 2.x) |
+| `numpy.dtype size changed` on export | `pip install --upgrade scikit-image` (need ≥0.23 for NumPy 2.x) |
