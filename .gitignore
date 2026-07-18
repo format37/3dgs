@@ -1,4 +1,4 @@
-data/
+data
 output
 node_modules
 .claude/
