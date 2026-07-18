@@ -1,8 +1,9 @@
 data/
-output/
+output
 node_modules
 .claude/
 temp/
 input/
 export/
 _workflow.sh
+nvme_temp.log

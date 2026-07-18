@@ -2,3 +2,4 @@ nerfstudio==1.1.5
 numba>=0.60
 scikit-image>=0.23
 plyfile
+spandrel>=0.4.0
